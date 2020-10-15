@@ -1,8 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebasedemo/screens/login.dart';
 import 'package:flutter/material.dart';
 import 'package:firebasedemo/controller/authentication.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'managefood.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -10,147 +14,206 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final User user = FirebaseAuth.instance.currentUser;
+  // final User user = FirebaseAuth.instance.currentUser;
+  String uid;
+  String uname;
+
+  @override
+  void initState() {
+    super.initState();
+    findUserPreference();
+  }
+
+  Future<void> findUserPreference() async {
+    await Firebase.initializeApp();
+    SharedPreferences pre = await SharedPreferences.getInstance();
+    setState(() {
+      uid = pre.getString('uid');
+      uname = pre.getString('displayName');
+    });
+  }
+
+  Future<void> signOutPage() async {
+    SharedPreferences pre = await SharedPreferences.getInstance();
+    pre.clear();
+  }
+
+  void _showSnackBar(BuildContext context, String text) {
+    Scaffold.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Scaffold(
         appBar: AppBar(
-          title: Text("Welcome ${user.displayName}"),
+          title: Text("Welcome $uname"),
           actions: [
             IconButton(
               icon: Icon(Icons.logout),
-              onPressed: () => googleSignOut().whenComplete(() => {
-                    Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (context) => SignInPage(),
-                        ),
-                        (route) => false)
-                  }),
+              onPressed: () => googleSignOut().whenComplete(() {
+                signOutPage();
+                Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (context) => SignInPage(),
+                    ),
+                    (route) => false);
+              }),
             )
           ],
         ),
-        body: realTimeRead("2"),
-        // oneTimeRead("2"),
-        // oneTimeFood(),
-        // realTimeFood(),
-        // Center(
-        //   child: SingleChildScrollView(
-        //     child: Column(
-        //       mainAxisAlignment: MainAxisAlignment.center,
-        //       children: [
-        //         oneTimeFood(),
-        //         // Image.network(
-        //         //   '${user.photoURL}',
-        //         // ),
-        //         // SizedBox(
-        //         //   height: 16,
-        //         // ),
-        //         // buildCard("Display Name: ${user.displayName}"),
-        //         // buildCard("Email: ${user.email}"),
-        //         // buildCard("Last Sign In: ${user.metadata.lastSignInTime}"),
-        //       ],
-        //     ),
-        //   ),
-        // ),
+        body: Builder(
+          builder: (context) {
+            return SingleChildScrollView(
+              child: Column(
+                children: [
+                  Container(
+                    width: 150,
+                    child: RaisedButton.icon(
+                      color: Colors.green,
+                      onPressed: () {
+                        MaterialPageRoute route = MaterialPageRoute(
+                          builder: (context) => ManageFood(action: 'add'),
+                        );
+                        Navigator.push(context, route);
+                      },
+                      icon: Icon(
+                        Icons.add_circle,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        'เพิ่มเมนู',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                  buildMenuList(context),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget realTimeFood() {
-    return StreamBuilder(
-      stream: FirebaseFirestore.instance.collection("Foods").snapshots(),
-      builder: (context, snapshot) {
-        switch (snapshot.connectionState) {
-          case ConnectionState.waiting:
-            return CircularProgressIndicator();
-            break;
-          default:
-            return ListView(
-              children: makeListWidget(snapshot),
-            );
-        }
-      },
-    );
-  }
-
-  List<Widget> makeListWidget(AsyncSnapshot snapshot) {
+  List<Widget> findAllMenu(BuildContext context, AsyncSnapshot snapshot) {
     return snapshot.data.docs.map<Widget>((document) {
-      return ListTile(
-        title: Text(document['food_name']),
-        subtitle: Text(document['price'].toString()),
+      return Slidable(
+        child: Container(
+          child: ListTile(
+            title: Text(document['food_name']),
+            subtitle: Text(document['price'].toString()),
+            onTap: () {
+              MaterialPageRoute route = MaterialPageRoute(
+                builder: (context) => ManageFood(
+                  action: 'edit',
+                  item: document.id,
+                ),
+              );
+              Navigator.push(context, route);
+            },
+          ),
+        ),
+        actionPane: SlidableDrawerActionPane(),
+        secondaryActions: [
+          IconSlideAction(
+            caption: 'Delete',
+            color: Colors.red,
+            icon: Icons.delete,
+            // when onTap should be show alertDialog when tap on delete show snackbar
+            onTap: () {
+              AlertDialog dialog = buildDeleteDialog(document, context);
+              showDialog(
+                context: context,
+                builder: (context) => dialog,
+              );
+            },
+          ),
+        ],
       );
     }).toList();
   }
 
-  Widget oneTimeFood() {
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance.collection("Foods").get(),
-      builder: (context, snapshot) {
-        switch (snapshot.connectionState) {
-          case ConnectionState.waiting:
-            return CircularProgressIndicator();
-            break;
-          default:
-            return ListView(
-              children: makeListWidget(snapshot),
-            );
-        }
-      },
-    );
-  }
-
-  oneTimeRead(String s) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection("Foods").doc(s).get(),
-      builder: (context, snapshot) {
-        switch (snapshot.connectionState) {
-          case ConnectionState.waiting:
-            return CircularProgressIndicator();
-            break;
-          default:
-            return ListTile(
-              title: Text(snapshot.data.data()['food_name']),
-              subtitle: Text(snapshot.data.data()['price'].toString()),
-            );
-        }
-      },
-    );
-  }
-
-  realTimeRead(String s) {
+  Widget buildMenuList(BuildContext context) {
     return StreamBuilder(
-      stream: FirebaseFirestore.instance.collection("Foods").doc(s).snapshots(),
+      stream: FirebaseFirestore.instance.collection('Foods').snapshots(),
       builder: (context, snapshot) {
         switch (snapshot.connectionState) {
           case ConnectionState.waiting:
             return CircularProgressIndicator();
             break;
           default:
-            return ListTile(
-              title: Text(snapshot.data.data()['food_name']),
-              subtitle: Text(snapshot.data.data()['price'].toString()),
+            return Column(
+              children: findAllMenu(context, snapshot),
             );
         }
       },
     );
   }
 
-  Card buildCard(String str) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+  Future<void> deleteFood(id) async {
+    await FirebaseFirestore.instance.collection('Foods').doc(id).delete();
+  }
+
+  AlertDialog buildDeleteDialog(document, BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        'ลบรายการอาหาร !!',
+        style: TextStyle(color: Colors.red),
+      ),
+      content: SingleChildScrollView(
+        child: ListBody(
           children: [
-            Text(
-              str,
-              style: TextStyle(fontSize: 18),
-            ),
+            Text('คุณต้องการลบรายการอาหาร ${document['food_name']}'),
           ],
         ),
       ),
+      actions: [
+        RaisedButton(
+          child: Text(
+            'ยกเลิก',
+            style: TextStyle(
+              color: Colors.white,
+            ),
+          ),
+          color: Colors.lightBlue[600],
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+        ),
+        RaisedButton(
+            child: Text(
+              'ลบรายการ',
+              style: TextStyle(
+                color: Colors.white,
+              ),
+            ),
+            color: Colors.red[600],
+            onPressed: () {
+              // delete item from Firebase
+              deleteFood(document.id);
+              Navigator.of(context).pop();
+              _showSnackBar(context, 'ลบรายการอาหารแล้ว');
+            })
+      ],
     );
   }
+
+  // Widget buildMenuList(BuildContext context) {
+  //   return FutureBuilder(
+  //     future: FirebaseFirestore.instance.collection('Foods').get(),
+  //     builder: (context, snapshot) {
+  //       if (snapshot.connectionState == ConnectionState.done)
+  //         return Column(
+  //           children: findAllMenu(context, snapshot),
+  //         );
+  //       else
+  //         return CircularProgressIndicator();
+  //     },
+  //   );
+  // }
 }
