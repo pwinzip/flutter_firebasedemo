@@ -15,9 +15,12 @@ class _ManageFoodState extends State<ManageFood> {
   TextEditingController _priceController = TextEditingController();
   TextEditingController _foodTypeController = TextEditingController();
 
+  String _chooseItem;
+
   @override
   void initState() {
     super.initState();
+    _chooseItem = 'ตำ';
     checkAction();
   }
 
@@ -42,8 +45,9 @@ class _ManageFoodState extends State<ManageFood> {
               TextEditingController(text: value.data()['food_name']);
           _priceController =
               TextEditingController(text: value.data()['price'].toString());
-          _foodTypeController =
-              TextEditingController(text: value.data()['type']);
+          // _foodTypeController =
+          //     TextEditingController(text: value.data()['type']);
+          _chooseItem = value.data()['type'];
         });
       });
     }
@@ -67,8 +71,10 @@ class _ManageFoodState extends State<ManageFood> {
                     makeTextField(_foodNameController, 'ชื่ออาหาร',
                         Icons.restaurant_menu),
                     makeTextField(_priceController, 'ราคา', Icons.local_offer),
-                    makeTextField(
-                        _foodTypeController, 'ประเภท', Icons.menu_book),
+                    makeDropDownType(),
+                    // Text(_chooseItem),
+                    // makeTextField(
+                    //     _foodTypeController, 'ประเภท', Icons.menu_book),
                     Container(
                       width: 250,
                       child: RaisedButton.icon(
@@ -91,7 +97,7 @@ class _ManageFoodState extends State<ManageFood> {
                           style: TextStyle(color: Colors.white),
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -133,5 +139,36 @@ class _ManageFoodState extends State<ManageFood> {
       'price': int.parse(_priceController.text),
       'type': _foodTypeController.text,
     }).whenComplete(() => Navigator.of(context).pop());
+  }
+
+  Widget makeDropDownType() {
+    return Container(
+      padding: EdgeInsets.only(bottom: 16),
+      width: 300,
+      child: Center(
+        child: DropdownButton(
+          onChanged: (value) {
+            setState(() {
+              _chooseItem = value;
+            });
+          },
+          value: _chooseItem,
+          items: [
+            DropdownMenuItem(
+              child: Text("ตำ"),
+              value: 'ตำ',
+            ),
+            DropdownMenuItem(
+              child: Text("ย่าง"),
+              value: 'ย่าง',
+            ),
+            DropdownMenuItem(
+              child: Text("ลาบ/น้ำตก"),
+              value: 'ลาบ_น้ำตก',
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

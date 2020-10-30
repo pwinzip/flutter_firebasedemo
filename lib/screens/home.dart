@@ -1,12 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebasedemo/screens/login.dart';
+import 'package:firebasedemo/screens/uploadimage.dart';
 import 'package:flutter/material.dart';
 import 'package:firebasedemo/controller/authentication.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'managefood.dart';
+import 'package:firebasedemo/screens/managefood.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -17,11 +18,18 @@ class _HomePageState extends State<HomePage> {
   // final User user = FirebaseAuth.instance.currentUser;
   String uid;
   String uname;
+  TextEditingController searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     findUserPreference();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   Future<void> findUserPreference() async {
@@ -64,99 +72,54 @@ class _HomePageState extends State<HomePage> {
         ),
         body: Builder(
           builder: (context) {
-            return SingleChildScrollView(
+            return Container(
               child: Column(
                 children: [
                   Container(
-                    width: 150,
-                    child: RaisedButton.icon(
-                      color: Colors.green,
-                      onPressed: () {
-                        MaterialPageRoute route = MaterialPageRoute(
-                          builder: (context) => ManageFood(action: 'add'),
-                        );
-                        Navigator.push(context, route);
+                    padding: EdgeInsets.all(8),
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: (value) {
+                        setState(() {});
                       },
-                      icon: Icon(
-                        Icons.add_circle,
-                        color: Colors.white,
-                      ),
-                      label: Text(
-                        'เพิ่มเมนู',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
+                      decoration: InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(16),
+                          ),
                         ),
                       ),
                     ),
                   ),
                   buildMenuList(context),
+                  Container(
+                    child: IconButton(
+                        icon: Icon(Icons.camera),
+                        onPressed: () {
+                          MaterialPageRoute route = MaterialPageRoute(
+                            builder: (context) => UploadImage(),
+                          );
+                          Navigator.push(context, route);
+                        }),
+                  )
+                  // buildMenuListByType(),
                 ],
               ),
             );
           },
         ),
+        floatingActionButton: FloatingActionButton(
+          child: Icon(Icons.add),
+          onPressed: () {
+            MaterialPageRoute route = MaterialPageRoute(
+              builder: (context) => ManageFood(action: 'add'),
+            );
+            Navigator.push(context, route);
+          },
+        ),
       ),
     );
-  }
-
-  List<Widget> findAllMenu(BuildContext context, AsyncSnapshot snapshot) {
-    return snapshot.data.docs.map<Widget>((document) {
-      return Slidable(
-        child: Container(
-          child: ListTile(
-            title: Text(document['food_name']),
-            subtitle: Text(document['price'].toString()),
-            onTap: () {
-              MaterialPageRoute route = MaterialPageRoute(
-                builder: (context) => ManageFood(
-                  action: 'edit',
-                  item: document.id,
-                ),
-              );
-              Navigator.push(context, route);
-            },
-          ),
-        ),
-        actionPane: SlidableDrawerActionPane(),
-        secondaryActions: [
-          IconSlideAction(
-            caption: 'Delete',
-            color: Colors.red,
-            icon: Icons.delete,
-            // when onTap should be show alertDialog when tap on delete show snackbar
-            onTap: () {
-              AlertDialog dialog = buildDeleteDialog(document, context);
-              showDialog(
-                context: context,
-                builder: (context) => dialog,
-              );
-            },
-          ),
-        ],
-      );
-    }).toList();
-  }
-
-  Widget buildMenuList(BuildContext context) {
-    return StreamBuilder(
-      stream: FirebaseFirestore.instance.collection('Foods').snapshots(),
-      builder: (context, snapshot) {
-        switch (snapshot.connectionState) {
-          case ConnectionState.waiting:
-            return CircularProgressIndicator();
-            break;
-          default:
-            return Column(
-              children: findAllMenu(context, snapshot),
-            );
-        }
-      },
-    );
-  }
-
-  Future<void> deleteFood(id) async {
-    await FirebaseFirestore.instance.collection('Foods').doc(id).delete();
   }
 
   AlertDialog buildDeleteDialog(document, BuildContext context) {
@@ -203,6 +166,146 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget buildMenuList(BuildContext context) {
+    print(searchController.text);
+    return StreamBuilder(
+      stream: (searchController.text.trim().isNotEmpty &&
+              searchController.text != null)
+          ? FirebaseFirestore.instance
+              .collection('Foods')
+              .where('food_name', isGreaterThan: searchController.text)
+              .snapshots()
+          : FirebaseFirestore.instance.collection('Foods').snapshots(),
+      builder: (context, snapshot) {
+        switch (snapshot.connectionState) {
+          case ConnectionState.waiting:
+            return CircularProgressIndicator();
+            break;
+          default:
+            return Expanded(
+              child: ListView.builder(
+                itemCount: snapshot.data.docs.length,
+                itemBuilder: (context, index) {
+                  DocumentSnapshot data = snapshot.data.docs[index];
+                  return makeSearchList(data);
+                },
+              ),
+            );
+        }
+      },
+    );
+  }
+
+  Slidable makeSearchList(DocumentSnapshot data) {
+    Map<String, dynamic> d = data.data();
+    return Slidable(
+      child: Container(
+        child: ListTile(
+          title: Text(d['food_name']),
+          subtitle: Text(d['price'].toString()),
+          onTap: () {
+            MaterialPageRoute route = MaterialPageRoute(
+              builder: (context) => ManageFood(
+                action: 'edit',
+                item: data.id,
+              ),
+            );
+            Navigator.push(context, route);
+          },
+        ),
+      ),
+      actionPane: SlidableDrawerActionPane(),
+      secondaryActions: [
+        IconSlideAction(
+          caption: 'Delete',
+          color: Colors.red,
+          icon: Icons.delete,
+          // when onTap should be show alertDialog when tap on delete show snackbar
+          onTap: () {
+            AlertDialog dialog = buildDeleteDialog(d, context);
+            showDialog(
+              context: context,
+              builder: (context) => dialog,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  List<Widget> findAllMenu(BuildContext context, AsyncSnapshot snapshot) {
+    return snapshot.data.docs.map<Widget>((document) {
+      return Slidable(
+        child: Container(
+          child: ListTile(
+            title: Text(document['food_name']),
+            subtitle: Text(document['price'].toString()),
+            onTap: () {
+              MaterialPageRoute route = MaterialPageRoute(
+                builder: (context) => ManageFood(
+                  action: 'edit',
+                  item: document.id,
+                ),
+              );
+              Navigator.push(context, route);
+            },
+          ),
+        ),
+        actionPane: SlidableDrawerActionPane(),
+        secondaryActions: [
+          IconSlideAction(
+            caption: 'Delete',
+            color: Colors.red,
+            icon: Icons.delete,
+            // when onTap should be show alertDialog when tap on delete show snackbar
+            onTap: () {
+              AlertDialog dialog = buildDeleteDialog(document, context);
+              showDialog(
+                context: context,
+                builder: (context) => dialog,
+              );
+            },
+          ),
+        ],
+      );
+    }).toList();
+  }
+
+  Widget buildMenuListByType() {
+    return StreamBuilder(
+      stream: FirebaseFirestore.instance
+          .collection('FoodTypes')
+          .doc('ตำ')
+          .snapshots(),
+      builder: (context, snapshot) {
+        switch (snapshot.connectionState) {
+          case ConnectionState.waiting:
+            return CircularProgressIndicator();
+            break;
+          default:
+            return Column(
+              children: makeFoodList(snapshot),
+            );
+        }
+      },
+    );
+  }
+
+  List<Widget> makeFoodList(AsyncSnapshot snapshot) {
+    List<Widget> alist = [];
+    Map<String, dynamic> data = snapshot.data.data();
+    for (var key in data.keys) {
+      alist.add(ListTile(
+        title: Text(key),
+      ));
+    }
+    return alist;
+  }
+
+  Future<void> deleteFood(id) async {
+    await FirebaseFirestore.instance.collection('Foods').doc(id).delete();
+  }
+
   // Widget buildMenuList(BuildContext context) {
   //   return FutureBuilder(
   //     future: FirebaseFirestore.instance.collection('Foods').get(),
@@ -216,4 +319,5 @@ class _HomePageState extends State<HomePage> {
   //     },
   //   );
   // }
+
 }
